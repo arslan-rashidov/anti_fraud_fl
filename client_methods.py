@@ -19,7 +19,8 @@ model_parameters = {
 }
 
 dataset_parameters = {
-    'shuffle': True
+    'shuffle': True,
+    'test_size': 0.1
 }
 
 train_parameters = {
@@ -56,7 +57,8 @@ def get_dataset(dataset_path: str, with_split: bool, test_size: float, shuffle: 
         return test_set
 
 
-def train(model: torch.nn.Module, train_set: torch.utils.data.Dataset, epochs: int, batch_size: int, lr: float) -> Tuple[List[Metric], torch.nn.Module]:
+def train(model: torch.nn.Module, train_set: torch.utils.data.Dataset, epochs: int, batch_size: int, lr: float) -> \
+Tuple[List[Metric], torch.nn.Module]:
     train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 
     optimizer = AdamW(params=model.parameters(), lr=lr)
@@ -90,3 +92,48 @@ def train(model: torch.nn.Module, train_set: torch.utils.data.Dataset, epochs: i
     return ([train_epoch_loss_metric], model)
 
 
+def test(model: torch.nn.Module, test_set: torch.utils.data.Dataset, return_output: bool) -> Union[
+    List[Metric], Tuple[List[Metric], list]]:
+    test_loss = 0.0
+    model.eval()
+    loss_fn = BCELoss()
+
+    test_dataloader = DataLoader(test_set)
+
+    outputs = []
+    labels = np.array([])
+
+    for i, data in enumerate(test_dataloader):
+        transactions, label = data['transaction'], data['label']
+
+        transactions = transactions.reshape(transactions.shape[0], 1, transactions.shape[1])
+        output = model(transactions)
+
+        loss = loss_fn(output, label)
+
+        test_loss += loss.item()
+
+        outputs.append(output.cpu().detach().numpy().reshape(-1))
+        labels = np.hstack([labels, label.cpu().reshape(-1)])
+
+    test_loss /= len(test_dataloader)
+
+    test_loss_metric = Metric(name="test_loss")
+    test_loss_metric.log_value(test_loss)
+
+    test_roc_auc_score = roc_auc_score(labels, np.array(outputs))
+
+    test_roc_auc_score_metric = Metric(name="test_roc_auc_score")
+    test_roc_auc_score_metric.log_value(test_roc_auc_score)
+
+    if return_output:
+        return [test_loss_metric, test_roc_auc_score_metric], outputs
+    else:
+        return [test_loss_metric, test_roc_auc_score_metric]
+
+def get_prediction(model: torch.nn.Module, dataset_path: str) -> list:
+    test_set = get_dataset(dataset_path, with_split=False, test_size=1, shuffle=False)
+
+    metrics, output = test(model, test_set, return_output=True)
+
+    return output

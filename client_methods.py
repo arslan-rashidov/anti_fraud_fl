@@ -121,15 +121,10 @@ def test(model: torch.nn.Module, test_set: torch.utils.data.Dataset, return_outp
     test_loss_metric = Metric(name="test_loss")
     test_loss_metric.log_value(test_loss)
 
-    test_roc_auc_score = roc_auc_score(labels, np.array(outputs))
-
-    test_roc_auc_score_metric = Metric(name="test_roc_auc_score")
-    test_roc_auc_score_metric.log_value(test_roc_auc_score)
-
     if return_output:
-        return [test_loss_metric, test_roc_auc_score_metric], outputs
+        return [test_loss_metric], outputs
     else:
-        return [test_loss_metric, test_roc_auc_score_metric]
+        return [test_loss_metric]
 
 def get_prediction(model: torch.nn.Module, dataset_path: str) -> list:
     test_set = get_dataset(dataset_path, with_split=False, test_size=1, shuffle=False)
